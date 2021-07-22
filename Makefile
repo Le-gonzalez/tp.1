@@ -1,5 +1,5 @@
-CFLAGS=-Wall -std=c99 -pedantic -g
-LFLAGS=-lm -lSDL2 -lSDL2_ttf -DTTF
+CFLAGS=-Wall -std=c99 -pedantic -g -DTTF
+LFLAGS=-lm -lSDL2 -lSDL2_ttf 
 
 all: peggle
 

@@ -11,18 +11,24 @@ struct poligono {
 
 poligono_t *poligono_crear(float vertices[][2], size_t n){
   poligono_t *pol = malloc(sizeof(poligono_t));
-  if(pol == NULL)
-    return NULL;
-    
-  pol->vertices = malloc(2 * n * sizeof(float));
-  if (pol->vertices == NULL){
-    free(pol);
+  if(pol == NULL){
     return NULL;
   }
   
-  for(size_t i = 0; i < n; i++){
-    pol->vertices[i][0] = vertices[i][0];
-    pol->vertices[i][1] = vertices[i][1];
+  if(n != 0){  
+    pol->vertices = malloc(2 * n * sizeof(float));
+    if (pol->vertices == NULL){
+      free(pol);
+      return NULL;
+    } 
+    
+    for(size_t i = 0; i < n; i++){
+      pol->vertices[i][0] = vertices[i][0];
+      pol->vertices[i][1] = vertices[i][1];
+    }
+  }
+  else {
+    pol->vertices = NULL; 
   }
   
   pol->n = n;
@@ -40,7 +46,7 @@ size_t poligono_cantidad_vertices(const poligono_t *poligono){
 }
 
 bool poligono_obtener_vertice(const poligono_t *poligono, size_t pos, float *x, float *y){
-  if((poligono -> n <= pos) || (pos < 0))
+  if((poligono -> n <= pos))
     return false;
     
   *x = poligono -> vertices[pos][0]; 
@@ -55,9 +61,9 @@ poligono_t *poligono_clonar(const poligono_t *poligono){
 
 bool poligono_agregar_vertice(poligono_t *poligono, float x, float y){
   float (*aux)[2] = realloc(poligono -> vertices, (poligono -> n + 1) * 2 *sizeof(float));
-  if(aux == NULL)
+  if(aux == NULL){
     return false;  
- 
+  }
   aux[poligono -> n][0] = x;
   aux[poligono -> n][1] = y; 
   
@@ -75,8 +81,9 @@ poligono_t *poligono_circular_crear(float cx, float cy , float r){
   }
   
   poligono_t *circulo = poligono_crear(puntos, 20);
-  if(circulo == NULL)
+  if(circulo == NULL){
     return NULL;
+  }
    
   poligono_trasladar(circulo, cx, cy);
   return circulo; 
@@ -136,7 +143,7 @@ poligono_t *(*geometrias[])(FILE*) = {
 
 bool leer_encabezado(FILE *f, color_t *color, movimiento_t *movimiento, geometria_t *geometria){
   int8_t encabezado;
-  if(1 != fread(&encabezado, sizeof(int8_t), 1, f)) return false;
+  if(fread(&encabezado, sizeof(int8_t), 1, f) != 1) return false;
   
   *color = (encabezado & CLR_MSK) >> SHIFT_CLR;
   *movimiento = (encabezado & MOV_MSK) >> SHIFT_MOV;
@@ -185,9 +192,9 @@ poligono_t *leer_geometria_rectangulo(FILE *f){
   int16_t parametros[PAR_GEO_RTG];
   poligono_t *p;
   
-  if(PAR_GEO_RTG != fread(parametros, sizeof(int16_t), PAR_GEO_RTG, f))
+  if(PAR_GEO_RTG != fread(parametros, sizeof(int16_t), PAR_GEO_RTG, f)){
     return NULL; 
-    
+  }  
   float puntos[][2] = {{parametros[2], parametros[3]},{-parametros[2], parametros[3]},{-parametros[2], -parametros[3]},{parametros[2], -parametros[3]}};
   
   for(size_t i = 0; i < 4; i++){
@@ -196,6 +203,10 @@ poligono_t *leer_geometria_rectangulo(FILE *f){
   }
   
   p = poligono_crear(puntos, 4);
+  if( p == NULL){
+    return NULL;
+  }
+    
   poligono_rotar(p, grados_a_radianes(parametros[4])); 
   poligono_trasladar(p, parametros[0], parametros[1]);
   
@@ -204,17 +215,21 @@ poligono_t *leer_geometria_rectangulo(FILE *f){
 
 poligono_t *leer_geometria_poligono(FILE *f){
   int16_t puntos;
-  if(1 != fread(&puntos, sizeof(int16_t), 1, f)) return NULL;
+  if(fread(&puntos, sizeof(int16_t), 1, f) != 1) return NULL;
   
   poligono_t *p = poligono_crear(NULL, 0);
-  if(p == NULL)
+  if(p == NULL){
     return NULL;
+  }
    
   int16_t parametros[2];
     
   for(size_t i = 0; i < puntos; i++){
-    if(2 == fread(parametros, sizeof(int16_t), 2, f))
-      poligono_agregar_vertice(p, parametros[0], parametros[1]);
+    if(fread(parametros, sizeof(int16_t), 2, f) != 2){
+      poligono_destruir(p);
+      return NULL;
+    }
+    poligono_agregar_vertice(p, parametros[0], parametros[1]);
   }
   
   return p;
@@ -262,9 +277,10 @@ void punto_mas_cercano(float x0, float y0, float x1, float y1, float xp, float y
 void reflejar(float norm_x, float norm_y, float *cx, float *cy, float *vx, float *vy) {
   float proy = producto_interno(norm_x, norm_y, *vx, *vy);
 
-  if(proy >= 0)
+  if(proy >= 0){
     return;
-
+  }
+  
   *vx -= 2 * norm_x * proy;
   *vy -= 2 * norm_y * proy;
 

@@ -80,178 +80,188 @@ int main(int argc, char *argv[]) {
 
   float cx, cy;   // Centro de la bola
   float vx, vy;   // Velocidad de la bola
-  
+ 
+  int16_t obstaculos;
   int nivel = 0;
-  float norm_x, norm_y;
+  
+  lista_t *obs = NULL;
   lista_iter_t *li;
   
-  
+  float norm_x, norm_y;
+   
+  int count = 0;
     // END código del alumno
 
   unsigned int ticks = SDL_GetTicks();
   
-  while(1){
-    nivel++;
-     int count = 25;
-     
-    lista_t *obs = lista_crear();
-    if(obs == NULL){
-      fprintf(stderr, "no se pudo crear la lista de obstaculos\n");
-      return 1;
-    }
-  
-    int16_t obstaculos;
-    if(! fread(&obstaculos, sizeof(int16_t), 1, f)){
-      fprintf(stderr, "no se pudo leer los obstaculos\n");
-      return 1;
-    }
-  
-    for(size_t i = 0; i < obstaculos; i++){
-      obstaculo_t *obstaculo = obstaculo_leer(f);
-      if(obstaculo == NULL){
-        fprintf(stderr, "no se pudo leer los obstaculos\n");
-        lista_destruir(obs, _obstaculo_destruir);
-        return 1;
+  while(1) {
+    if(SDL_PollEvent(&event)) {
+      if (event.type == SDL_QUIT){
+        break; 
       }
-      
-      lista_insertar_ultimo(obs, obstaculo);
-    }
-    
-    while(1) {
-     if(SDL_PollEvent(&event)) {
-        if (event.type == SDL_QUIT)
-          break; 
-
-        // BEGIN código del alumno
-        if(event.type == SDL_MOUSEBUTTONDOWN) {
-          if(! cayendo)
-            cayendo = true;
-        }
-        else if (event.type == SDL_MOUSEMOTION) {
-          canon_angulo = atan2(event.motion.x - CANON_X, event.motion.y - CANON_Y);
-          if(canon_angulo > CANON_MAX)
-             canon_angulo = CANON_MAX;
-          if(canon_angulo < -CANON_MAX)
-             canon_angulo = -CANON_MAX;
-        }
-        // END código del alumno
-
-        continue;
+    // BEGIN código del alumno
+      if(event.type == SDL_MOUSEBUTTONDOWN) {
+        if(! cayendo){
+          cayendo = true;
+        }  
       }
-      SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0x00);
-      SDL_RenderClear(renderer);
-      SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0x00);
+      else if (event.type == SDL_MOUSEMOTION) {
+        canon_angulo = atan2(event.motion.x - CANON_X, event.motion.y - CANON_Y);
+        if(canon_angulo > CANON_MAX){
+          canon_angulo = CANON_MAX;
+        }
+        if(canon_angulo < -CANON_MAX){
+          canon_angulo = -CANON_MAX;
+        }
+      }
+      // END código del alumno
+
+      continue;
+    }
+    SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0x00);
+    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0x00);
 
 
       // BEGIN código del alumno
 #ifdef TTF
-      escribir_texto(renderer, font, "Peggle", 100, 20);
+    escribir_texto(renderer, font, "Peggle", 100, 20);
 #endif
-
-      if(cayendo) {
+    if(!count){
+      if(nivel == 6){
+        break;
+      }
+      
+      if(obs != NULL){
+        lista_destruir(obs, _obstaculo_destruir);
+      }
+           
+      nivel++;
+      count = 25;
+         
+      cayendo = false; 
+         
+      obs = lista_crear();
+      if(obs == NULL){
+        fprintf(stderr, "no se pudo crear la lista de obstaculos\n");
+        return 1;
+      }
+  
+      if(! fread(&obstaculos, sizeof(int16_t), 1, f)){
+        fprintf(stderr, "no se pudo leer los obstaculos\n");
+        return 1;
+      }
+  
+      for(size_t i = 0; i < obstaculos; i++){
+        obstaculo_t *obstaculo = obstaculo_leer(f);
+        if(obstaculo == NULL){
+          fprintf(stderr, "no se pudo leer los obstaculos\n");
+          lista_destruir(obs, _obstaculo_destruir);
+          return 1;
+        }
+      
+        lista_insertar_ultimo(obs, obstaculo);
+      }
+          
+    }
+    if(cayendo) {
        // Si la bola está cayendo actualizamos su posición
-        vy = computar_velocidad(vy, G, DT);
-        vx *= ROZAMIENTO;
-        vy *= ROZAMIENTO;
-        cx = computar_posicion(cx, vx, DT);
-        cy = computar_posicion(cy, vy, DT);
-      }
-      else {
-         // Si la bola no se disparó establecemos condiciones iniciales
-        cx = CANON_X + CANON_LARGO * sin(canon_angulo);
-        cy = CANON_Y + CANON_LARGO * cos(canon_angulo);
-        vx = BOLA_VI * sin(canon_angulo);
-        vy = BOLA_VI * cos(canon_angulo);
+      vy = computar_velocidad(vy, G, DT);
+      vx *= ROZAMIENTO;
+      vy *= ROZAMIENTO;
+      cx = computar_posicion(cx, vx, DT);
+      cy = computar_posicion(cy, vy, DT);
+    }
+    else {
+     // Si la bola no se disparó establecemos condiciones iniciales
+      cx = CANON_X + CANON_LARGO * sin(canon_angulo);
+      cy = CANON_Y + CANON_LARGO * cos(canon_angulo);
+      vx = BOLA_VI * sin(canon_angulo);
+      vy = BOLA_VI * cos(canon_angulo);
         
-       for(
-         li = lista_iter_crear(obs); 
-         !lista_iter_al_final(li);
-         lista_iter_avanzar(li)
-       ) {
-         obstaculo_t *obstaculo = lista_iter_ver_actual(li);
-         if(obstaculo_esta_marcado(obstaculo))
-           obstaculo_destruir(lista_iter_borrar(li));
-         } 
-      }
-
-        // Rebote contra las paredes:
-      if(cx < MIN_X + BOLA_RADIO || cx > MAX_X - BOLA_RADIO) vx = - vx;
-      if(cy < MIN_Y + BOLA_RADIO) vy = -vy;
-
-       // Se salió de la pantalla:
-       if(cy > MAX_Y - BOLA_RADIO){
-         cayendo = false;
-        
-       }          
-       // Dibujamos el cañón:
-       SDL_RenderDrawLine(renderer, CANON_X, CANON_Y, CANON_X + sin(canon_angulo) * CANON_LARGO, CANON_Y + cos(canon_angulo) * CANON_LARGO);
-
-       // Dibujamos la bola
-       dibujar_bola(renderer, cx, cy, BOLA_RADIO);
-
-        // Dibujamos las paredes:
-       SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0x00);
-       SDL_RenderDrawLine(renderer, MIN_X, MIN_Y, MAX_X, MIN_Y);
-       SDL_RenderDrawLine(renderer, MIN_X, MAX_Y, MAX_X, MAX_Y);
-       SDL_RenderDrawLine(renderer, MIN_X, MAX_Y, MIN_X, MIN_Y);
-       SDL_RenderDrawLine(renderer, MAX_X, MAX_Y, MAX_X, MIN_Y);
-
-       // Dibujamos el vector de velocidad:
-       SDL_RenderDrawLine(renderer, cx, cy, cx + vx, cy + vy);
-             
-       for(
-           li = lista_iter_crear(obs); 
-           !lista_iter_al_final(li);
-           lista_iter_avanzar(li)
-       ) {
-           obstaculo_t *obstaculo = lista_iter_ver_actual(li);
-           obstaculo_dibujar(renderer, obstaculo);
-           obstaculo_mover(obstaculo, DT);
-           
-           if(obstaculo_distancia(obstaculo, cx, cy, &norm_x, &norm_y) <= BOLA_RADIO) {
-             vx *= PLASTICIDAD;
-             vy *= PLASTICIDAD;
-             reflejar(norm_x, norm_y, &cx, &cy, &vx, &vy);
-             
-             if(obstaculo_color(obstaculo) != COLOR_GRIS){
-               if(obstaculo_color(obstaculo) == COLOR_NARANJA){
-                 count--; 
-               }
-               obstaculo_marcar(obstaculo);
-               obstaculo_cambiar_color(obstaculo, COLOR_AMARILLO);
-             }
-           }  
-           
-           if(((vx <= 1) && (vx >= -1)) && ((vy <= 1) && (vy >= -1)) && obstaculo_esta_marcado((obstaculo))){
-             obstaculo_destruir(lista_iter_borrar(li));
-           }
-       }
-       
-       lista_iter_destruir(li);
-       if(!count){
-         cayendo = false;         
-         break;
-       }
-       // END código del alumno
-
-       SDL_RenderPresent(renderer);
-       ticks = SDL_GetTicks() - ticks;
-       if(dormir) {
-         SDL_Delay(dormir);
-         dormir = 0;
-       }
-       else if(ticks < 1000 / JUEGO_FPS)
-         SDL_Delay(1000 / JUEGO_FPS - ticks);
-       ticks = SDL_GetTicks();
+      for(
+        li = lista_iter_crear(obs); 
+        !lista_iter_al_final(li);
+        lista_iter_avanzar(li)
+      ) {
+        obstaculo_t *obstaculo = lista_iter_ver_actual(li);
+        if(obstaculo_esta_marcado(obstaculo)){
+          obstaculo_destruir(lista_iter_borrar(li));
+        }
+      } 
+        lista_iter_destruir(li);
     }
 
-    // BEGIN código del alumno
-     lista_destruir(obs, _obstaculo_destruir);
+      // Rebote contra las paredes:
+    if(cx < MIN_X + BOLA_RADIO || cx > MAX_X - BOLA_RADIO) vx = - vx;
+    if(cy < MIN_Y + BOLA_RADIO) vy = -vy;
+
+     // Se salió de la pantalla:
+     if(cy > MAX_Y - BOLA_RADIO){
+       cayendo = false;
+     }          
+       // Dibujamos el cañón:
+     SDL_RenderDrawLine(renderer, CANON_X, CANON_Y, CANON_X + sin(canon_angulo) * CANON_LARGO, CANON_Y + cos(canon_angulo) * CANON_LARGO);
+
+     // Dibujamos la bola
+     dibujar_bola(renderer, cx, cy, BOLA_RADIO);
+
+      // Dibujamos las paredes:
+     SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0x00);
+     SDL_RenderDrawLine(renderer, MIN_X, MIN_Y, MAX_X, MIN_Y);
+     SDL_RenderDrawLine(renderer, MIN_X, MAX_Y, MAX_X, MAX_Y);
+     SDL_RenderDrawLine(renderer, MIN_X, MAX_Y, MIN_X, MIN_Y);
+     SDL_RenderDrawLine(renderer, MAX_X, MAX_Y, MAX_X, MIN_Y);
+
+     // Dibujamos el vector de velocidad:
+     SDL_RenderDrawLine(renderer, cx, cy, cx + vx, cy + vy);
+            
+     for(
+        li = lista_iter_crear(obs); 
+        !lista_iter_al_final(li);
+        lista_iter_avanzar(li)
+     ) {
+        obstaculo_t *obstaculo = lista_iter_ver_actual(li);
+        obstaculo_dibujar(renderer, obstaculo);
+        obstaculo_mover(obstaculo, DT);
+           
+        if(obstaculo_distancia(obstaculo, cx, cy, &norm_x, &norm_y) <= BOLA_RADIO) {
+          vx *= PLASTICIDAD;
+          vy *= PLASTICIDAD;
+          reflejar(norm_x, norm_y, &cx, &cy, &vx, &vy);
+             
+          if(obstaculo_color(obstaculo) != COLOR_GRIS){
+            if(obstaculo_color(obstaculo) == COLOR_NARANJA){
+               count--; 
+             }
+             obstaculo_marcar(obstaculo);
+             obstaculo_cambiar_color(obstaculo, COLOR_AMARILLO);
+           }
+         }  
+           
+         if(((vx <= 1) && (vx >= -1)) && ((vy <= 1) && (vy >= -1)) && obstaculo_esta_marcado((obstaculo))){
+           obstaculo_destruir(lista_iter_borrar(li));
+         }
+     }
+       
+     lista_iter_destruir(li);
      
-     if(nivel == 6)
-       break;
+     // END código del alumno
+
+     SDL_RenderPresent(renderer);
+     ticks = SDL_GetTicks() - ticks;
+     if(dormir) {
+       SDL_Delay(dormir);
+       dormir = 0;
+     }
+     else if(ticks < 1000 / JUEGO_FPS)
+       SDL_Delay(1000 / JUEGO_FPS - ticks);
+     ticks = SDL_GetTicks();
   }
-  
+
+  // BEGIN código del alumno
+ // lista_iter_destruir(li);
+  lista_destruir(obs, _obstaculo_destruir); 
   fclose(f);
     // END código del alumno
 
