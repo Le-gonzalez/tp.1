@@ -14,18 +14,18 @@ poligono_t *poligono_crear(float vertices[][2], size_t n){
   if(pol == NULL)
     return NULL;
     
-  pol -> vertices = malloc(2 * n * sizeof(float));
-  if (pol -> vertices == NULL){
+  pol->vertices = malloc(2 * n * sizeof(float));
+  if (pol->vertices == NULL){
     free(pol);
     return NULL;
   }
   
   for(size_t i = 0; i < n; i++){
-   
-    pol -> vertices[i][0] = vertices[i][0];
-    pol -> vertices[i][1] = vertices[i][1];
+    pol->vertices[i][0] = vertices[i][0];
+    pol->vertices[i][1] = vertices[i][1];
   }
-  pol -> n = n;
+  
+  pol->n = n;
   
   return pol;
 }
@@ -206,19 +206,16 @@ poligono_t *leer_geometria_poligono(FILE *f){
   int16_t puntos;
   if(1 != fread(&puntos, sizeof(int16_t), 1, f)) return NULL;
   
-  int16_t parametros[puntos][2];
-  size_t cant = sizeof(parametros)/sizeof(parametros[0][0]);
-  
-  if(cant != fread(parametros, sizeof(int16_t), cant, f))
+  poligono_t *p = poligono_crear(NULL, 0);
+  if(p == NULL)
     return NULL;
+   
+  int16_t parametros[2];
     
-  float vertices[puntos][2];
   for(size_t i = 0; i < puntos; i++){
-    vertices[i][0] = parametros[i][0];
-    vertices[i][1] = parametros[i][1];
+    if(2 == fread(parametros, sizeof(int16_t), 2, f))
+      poligono_agregar_vertice(p, parametros[0], parametros[1]);
   }
-  
-  poligono_t *p = poligono_crear(vertices, puntos);
   
   return p;
 }

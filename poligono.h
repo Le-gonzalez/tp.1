@@ -8,7 +8,7 @@
 //struct poligono;
 typedef struct poligono poligono_t;
 
-typedef enum {COLOR_AZUL, COLOR_NARANJA, COLOR_VERDE, COLOR_GRIS} color_t;
+typedef enum {COLOR_AZUL, COLOR_NARANJA, COLOR_VERDE, COLOR_GRIS, COLOR_AMARILLO} color_t;
 typedef enum {MOVIMIENTO_INMOVIL, MOVIMIENTO_CIRCULAR, MOVIMIENTO_HORIZONTAL} movimiento_t;
 typedef enum {GEOMETRIA_CIRCULO, GEOMETRIA_RECTANGULO, GEOMETRIA_POLIGONO} geometria_t;
 

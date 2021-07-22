@@ -27,5 +27,9 @@ void obstaculo_mover(obstaculo_t *obs, double dt);
 bool obstaculo_esta_marcado(obstaculo_t *obs);
 void obstaculo_marcar(obstaculo_t *obs);
 
+void obstaculo_cambiar_color(obstaculo_t *obs, color_t nuevo);
+
+double obstaculo_distancia(const obstaculo_t *obs, float xp, float yp, float *nor_x, float *nor_y);
+
 #endif 
 

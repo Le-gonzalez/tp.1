@@ -1,13 +1,14 @@
 #include "obstaculo.h"
 #include "poligono.h"
-#include "config.h"
 
 #include <stdlib.h>
 #include <string.h>
 
 #define MAX_PARAMETROS 4
 
-#define DT (1.0 / JUEGO_FPS)
+#ifndef PI
+#define PI 3.14159265358979323846
+#endif
 
 struct obstaculo {
   color_t color;
@@ -23,7 +24,8 @@ uint8_t color[][3] = {
   [COLOR_NARANJA] = {0xff, 0x80, 0x00},
   [COLOR_AZUL] = {0x00, 0x00, 0xff},
   [COLOR_VERDE] = {0x00, 0xff, 0x00},
-  [COLOR_GRIS] = {0x9b, 0x9b, 0x9b}
+  [COLOR_GRIS] = {0x9b, 0x9b, 0x9b},
+  [COLOR_AMARILLO] = {0xff, 0xff, 0x00}
 };
 
 void (*mover[])(obstaculo_t *obs, double dt) = {
@@ -122,29 +124,25 @@ obstaculo_t *obstaculo_leer(FILE *f){
 }
   
 void obstaculo_mover_horizontal(obstaculo_t *obs, double dt){
-  
+  if((obs->parametros_mov[1] >= obs->parametros_mov[0] ) && (obs->parametros_mov[2] > 0)) {
+    obs->parametros_mov[2] *= -1;
+  } 
     
   if((obs->parametros_mov[1] <= 0)  && (obs->parametros_mov[2] < 0) ){
     obs->parametros_mov[2] *= -1;
   }
   
-  if((obs->parametros_mov[1] >= obs->parametros_mov[0] ) && (obs->parametros_mov[2] > 0)){
-    obs->parametros_mov[2] *= -1;
-  } 
+ 
  // if(! ((obs->parametros_mov[1] >= 0) && (obs->parametros_mov[1] <= obs->parametros_mov[0]))) 
    // obs->parametros_mov[2] *= -1;
   
-  
+  poligono_trasladar(obs->cuerpo, obs->parametros_mov[2] * dt, 0);
   obs->parametros_mov[1] += obs->parametros_mov[2] * dt;
-  poligono_trasladar(obs->cuerpo, obs->parametros_mov[2] * dt, 0);     
+       
 }
 
 void obstaculo_mover_circular(obstaculo_t *obs, double dt){
-  poligono_t *p = poligono_clonar(obs->cuerpo);
-   
-  poligono_rotar_centrado(p, obs->parametros_mov[0], obs->parametros_mov[1], obs->parametros_mov[2] * dt);
-  poligono_destruir(obs->cuerpo);
-  obs->cuerpo = p;
+  poligono_rotar_centrado(obs->cuerpo, obs->parametros_mov[0], obs->parametros_mov[1], obs->parametros_mov[2] * dt);
 } 
 
 void obstaculo_no_mover(obstaculo_t *obs, double dt){
@@ -162,7 +160,15 @@ void obstaculo_marcar(obstaculo_t *obs){
   obs->marca = true;
 }
 
-int main (int argc, char *argv[]){
+void obstaculo_cambiar_color(obstaculo_t *obs, color_t nuevo){
+  obs->color = nuevo;
+}
+
+double obstaculo_distancia(const obstaculo_t *obs, float xp, float yp, float *nor_x, float *nor_y){
+  return poligono_distancia(obs->cuerpo, xp, yp, nor_x, nor_y);
+}
+
+/*int main (int argc, char *argv[]){
   if(argc != 2) {
     fprintf(stderr, "Uso: %s <archivo>\n", argv[0]);
     return 1;
@@ -193,7 +199,13 @@ int main (int argc, char *argv[]){
     obs[i] = obstaculo_leer(f);
   }
   while(1){
+    
      if(SDL_PollEvent(&event)) {
+        if(event.type == SDL_MOUSEBUTTONDOWN) {
+          if(obstaculo_color(obs[obstaculos - 1]) != COLOR_GRIS)
+             obstaculo_destruir(obs[obstaculos - 1]);
+           obstaculos--;
+        }
             if (event.type == SDL_QUIT)
                 break;
     }
@@ -235,4 +247,4 @@ int main (int argc, char *argv[]){
       obstaculo_destruir(obs[i]);
     }
   return 0;
-}
+}*/
