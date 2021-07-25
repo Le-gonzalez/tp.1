@@ -1,4 +1,4 @@
-CFLAGS=-Wall -std=c99 -pedantic -g -DTTF
+CFLAGS=-Wall -std=c99 -pedantic -g 
 LFLAGS=-lm -lSDL2 -lSDL2_ttf 
 
 all: peggle
@@ -7,7 +7,7 @@ peggle: main.o obstaculo.o poligono.o lista.o
 	gcc  main.o obstaculo.o poligono.o lista.o -o peggle $(LFLAGS)
 
 main.o: main.c obstaculo.h lista.h config.h
-	gcc $(CFLAGS) -c main.c
+	gcc $(CFLAGS) -c main.c -DTTF
 
 obstaculo.o: obstaculo.c obstaculo.h poligono.h
 	gcc $(CFLAGS) -c obstaculo.c

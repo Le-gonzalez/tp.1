@@ -10,8 +10,17 @@
 #ifdef TTF
 #include <SDL2/SDL_ttf.h>
 
-void escribir_texto(SDL_Renderer *renderer, TTF_Font *font, const char *s, int x, int y) {
-  SDL_Color color = {255, 255, 255};  // Estaría bueno si la función recibe un enumerativo con el color, ¿no?
+const uint8_t colores[][3] = {
+  [COLOR_NARANJA] = {0xff, 0x80, 0x00},
+  [COLOR_AZUL] = {0x00, 0x00, 0xff},
+  [COLOR_VERDE] = {0x00, 0xff, 0x00},
+  [COLOR_GRIS] = {0x9b, 0x9b, 0x9b},
+  [COLOR_AMARILLO] = {0xff, 0xff, 0x00},
+  [COLOR_BLANCO] = {0xff, 0xff, 0xff}
+};
+
+void escribir_texto(SDL_Renderer *renderer, TTF_Font *font, const char *s, int x, int y, color_t clr) {
+  SDL_Color color = {colores[clr][0], colores[clr][1], colores[clr][2]}; 
   SDL_Surface *surface = TTF_RenderText_Solid(font, s, color);
   SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
 
@@ -32,8 +41,7 @@ void dibujar_bola(SDL_Renderer *renderer, float cx, float cy, float r){
   for(size_t i = 0; i < 20; i++){
     SDL_RenderDrawLine(renderer, r *cos(i * PI/10.0) + cx, r * sin(i * PI/10.0) + cy, r * cos((i + 1) * PI/10.0) +cx, r * sin((i +1) * PI/10.0) + cy);
   }
-} 
-    
+}     
 
 double computar_velocidad(double vi, double a, double dt) {
   return vi += a * dt; 
@@ -43,8 +51,37 @@ double computar_posicion(double pi, double vi, double dt) {
   return pi += vi * dt;                    
 }     
 
+float producto_interno(float ax, float ay, float bx, float by){
+  return ax * bx + ay * by;
+}
+
+void reflejar(float norm_x, float norm_y, float *cx, float *cy, float *vx, float *vy) {
+  float proy = producto_interno(norm_x, norm_y, *vx, *vy);
+
+  if(proy >= 0){
+    return;
+  }
+  
+  *vx -= 2 * norm_x * proy;
+  *vy -= 2 * norm_y * proy;
+   
+  *cx += norm_x * 0.1;
+  *cy += norm_y * 0.1;
+}
+
 void _obstaculo_destruir(void *obs){
   obstaculo_destruir(obs);
+}
+
+void establecer_multiplicador(int count, int *mult){
+  if(count == 15)
+    *mult = 2;
+  else if(count == 10)
+    *mult = 3;
+  else if(count == 6)
+    *mult = 5;
+  else if(count == 4)
+    *mult = 10;
 }
 
 int main(int argc, char *argv[]) {
@@ -84,6 +121,9 @@ int main(int argc, char *argv[]) {
   int16_t obstaculos;
   int nivel = 0;
   
+  unsigned int puntos = 0;
+  int mult;
+  char spuntos[11];
   lista_t *obs = NULL;
   lista_iter_t *li;
   
@@ -123,9 +163,15 @@ int main(int argc, char *argv[]) {
     SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0x00);
 
 
-      // BEGIN código del alumno
+      // BEGIN código del alumno  
+    
+    
 #ifdef TTF
-    escribir_texto(renderer, font, "Peggle", 100, 20);
+    sprintf(spuntos, "%d", puntos);
+    
+    escribir_texto(renderer, font, "Peggle", 100, 20, COLOR_BLANCO);
+    escribir_texto(renderer, font, "Puntos", 500, 5, COLOR_BLANCO);
+    escribir_texto(renderer, font, spuntos, 500, 25, COLOR_BLANCO);
 #endif
     if(!count){
       if(nivel == 6){
@@ -138,6 +184,8 @@ int main(int argc, char *argv[]) {
            
       nivel++;
       count = 25;
+      puntos = 0;
+      mult = 1;
          
       cayendo = false; 
          
@@ -171,6 +219,40 @@ int main(int argc, char *argv[]) {
       vy *= ROZAMIENTO;
       cx = computar_posicion(cx, vx, DT);
       cy = computar_posicion(cy, vy, DT);
+      
+      for(
+        li = lista_iter_crear(obs); 
+        !lista_iter_al_final(li);
+        lista_iter_avanzar(li)
+     ) {
+        obstaculo_t *obstaculo = lista_iter_ver_actual(li);
+           
+        if(obstaculo_distancia(obstaculo, cx, cy, &norm_x, &norm_y) <= BOLA_RADIO) {
+          vx *= PLASTICIDAD;
+          vy *= PLASTICIDAD;
+          reflejar(norm_x, norm_y, &cx, &cy, &vx, &vy);
+             
+          if(obstaculo_color(obstaculo) != COLOR_GRIS){
+            if(obstaculo_color(obstaculo) == COLOR_NARANJA){
+               count--; 
+               establecer_multiplicador(count, &mult);
+               
+               if(! obstaculo_esta_marcado(obstaculo))
+                 puntos += 100 * mult;
+             }
+             if(! obstaculo_esta_marcado(obstaculo))
+                puntos += 10 * mult;
+                
+             obstaculo_marcar(obstaculo);
+             obstaculo_cambiar_color(obstaculo, COLOR_AMARILLO);             
+          }
+        }             
+        if(((vx <= 1) && (vx >= -1)) && ((vy <= 1) && (vy >= -1)) && obstaculo_esta_marcado((obstaculo))){
+          obstaculo_destruir(lista_iter_borrar(li));
+        }
+      }
+      
+    lista_iter_destruir(li);
     }
     else {
      // Si la bola no se disparó establecemos condiciones iniciales
@@ -189,7 +271,7 @@ int main(int argc, char *argv[]) {
           obstaculo_destruir(lista_iter_borrar(li));
         }
       } 
-        lista_iter_destruir(li);
+        lista_iter_destruir(li); 
     }
 
       // Rebote contra las paredes:
@@ -224,28 +306,9 @@ int main(int argc, char *argv[]) {
         obstaculo_t *obstaculo = lista_iter_ver_actual(li);
         obstaculo_dibujar(renderer, obstaculo);
         obstaculo_mover(obstaculo, DT);
-           
-        if(obstaculo_distancia(obstaculo, cx, cy, &norm_x, &norm_y) <= BOLA_RADIO) {
-          vx *= PLASTICIDAD;
-          vy *= PLASTICIDAD;
-          reflejar(norm_x, norm_y, &cx, &cy, &vx, &vy);
-             
-          if(obstaculo_color(obstaculo) != COLOR_GRIS){
-            if(obstaculo_color(obstaculo) == COLOR_NARANJA){
-               count--; 
-             }
-             obstaculo_marcar(obstaculo);
-             obstaculo_cambiar_color(obstaculo, COLOR_AMARILLO);
-           }
-         }  
-           
-         if(((vx <= 1) && (vx >= -1)) && ((vy <= 1) && (vy >= -1)) && obstaculo_esta_marcado((obstaculo))){
-           obstaculo_destruir(lista_iter_borrar(li));
-         }
-     }
-       
-     lista_iter_destruir(li);
-     
+     }            
+        
+     lista_iter_destruir(li);             
      // END código del alumno
 
      SDL_RenderPresent(renderer);

@@ -10,13 +10,27 @@
 #define PI 3.14159265358979323846
 #endif
 
+#define CLR_MSK 0xC0
+#define MOV_MSK 0x30
+#define GMT_MSK 0x0f
+
+#define MIN_VAL 0x00
+#define MAX_VAL 0x02
+
+#define SHIFT_CLR 6
+#define SHIFT_MOV 4
+
+#define PAR_CIR 3
+#define PAR_MOV_HZT 3
+#define PAR_GEO_RTG 5
+
 struct obstaculo {
   color_t color;
   movimiento_t mov;
   geometria_t geo;
   poligono_t *cuerpo;
   size_t n_parametros; 
-  int16_t *parametros_mov;
+  float *parametros_mov;
   bool marca;
 };
 
@@ -26,6 +40,18 @@ uint8_t color[][3] = {
   [COLOR_VERDE] = {0x00, 0xff, 0x00},
   [COLOR_GRIS] = {0x9b, 0x9b, 0x9b},
   [COLOR_AMARILLO] = {0xff, 0xff, 0x00}
+};
+
+bool (*movimientos[])(FILE*, int16_t*, size_t*) = {
+  [MOVIMIENTO_INMOVIL] = leer_movimiento_inmovil,
+  [MOVIMIENTO_CIRCULAR] = leer_movimiento_circular,
+  [MOVIMIENTO_HORIZONTAL] = leer_movimiento_horizontal,
+};
+
+poligono_t *(*geometrias[])(FILE*) = {
+  [GEOMETRIA_CIRCULO] = leer_geometria_circulo,
+  [GEOMETRIA_RECTANGULO] = leer_geometria_rectangulo, 
+  [GEOMETRIA_POLIGONO] = leer_geometria_poligono
 };
 
 void (*mover[])(obstaculo_t *obs, double dt) = {
@@ -40,7 +66,7 @@ obstaculo_t *obstaculo_crear(color_t color, movimiento_t mov, geometria_t geo, p
     return NULL;
   }
   
-  int16_t *parametros_mov = malloc(sizeof(int16_t) * n_parametros);
+  float *parametros_mov = malloc(sizeof(float) * n_parametros);
   if(parametros_mov == NULL){
     free(obstaculo);
     return NULL;
@@ -70,6 +96,7 @@ void obstaculo_destruir(obstaculo_t *obs){
 void obstaculo_dibujar(SDL_Renderer *renderer, obstaculo_t *obs){
   size_t n = poligono_cantidad_vertices(obs->cuerpo);
   SDL_SetRenderDrawColor(renderer, color[obs->color][0], color[obs->color][1], color[obs->color][2], 0x00);
+  
   float x1, y1, x2, y2;
   
   for(size_t i = 1; i < n; i++){
@@ -95,6 +122,106 @@ movimiento_t obstaculo_movimiento(obstaculo_t *obs){
 geometria_t obstaculo_geometria(obstaculo_t *obs){
   return obs->geo;
 }
+
+//------- funciones de lectura de archivo -----------//
+
+
+bool leer_encabezado(FILE *f, color_t *color, movimiento_t *movimiento, geometria_t *geometria){
+  int8_t encabezado;
+  if(fread(&encabezado, sizeof(int8_t), 1, f) != 1) return false;
+  
+  *color = (encabezado & CLR_MSK) >> SHIFT_CLR;
+  *movimiento = (encabezado & MOV_MSK) >> SHIFT_MOV;
+  *geometria = encabezado & GMT_MSK;
+  
+  return (*movimiento >= MIN_VAL && *movimiento <= MAX_VAL) && (*geometria >= MIN_VAL && *geometria <= MAX_VAL);
+}
+
+bool leer_movimiento_inmovil(FILE *f, int16_t parametros[], size_t *n_parametros){
+  *n_parametros = 0;
+  return true;
+}
+
+bool leer_movimiento_circular(FILE *f, int16_t parametros[], size_t *n_parametros){
+  *n_parametros = PAR_CIR;
+  return fread(parametros, sizeof(int16_t), *n_parametros, f) == PAR_CIR;
+}
+
+bool leer_movimiento_horizontal(FILE *f, int16_t parametros[], size_t *n_parametros){
+  *n_parametros = PAR_MOV_HZT;
+  return fread(parametros, sizeof(int16_t), *n_parametros, f) == PAR_MOV_HZT;
+}
+
+bool leer_movimiento(FILE *f, movimiento_t movimiento, int16_t parametros[], size_t *n_parametros){
+  return movimientos[movimiento](f, parametros, n_parametros);
+}   
+
+poligono_t *leer_geometria_circulo(FILE *f){
+  int16_t parametros[PAR_CIR];
+  
+  if(PAR_CIR != fread(parametros, sizeof(int16_t), PAR_CIR, f)){
+    return NULL;
+  }
+  
+  poligono_t *circulo = poligono_circular_crear(parametros[0], parametros[1], parametros[2]);
+  
+  return circulo;
+}
+
+static double grados_a_radianes(int a){
+  return a * PI/180.0;
+}
+
+poligono_t *leer_geometria_rectangulo(FILE *f){
+  int16_t parametros[PAR_GEO_RTG];
+  
+  if(PAR_GEO_RTG != fread(parametros, sizeof(int16_t), PAR_GEO_RTG, f)){
+    return NULL; 
+  }  
+  float puntos[][2] = {{parametros[2], parametros[3]},{-parametros[2], parametros[3]},{-parametros[2], -parametros[3]},{parametros[2], -parametros[3]}};
+  
+  for(size_t i = 0; i < 4; i++){
+    puntos[i][0] /= 2.0;
+    puntos[i][1] /= 2.0;
+  }
+  
+  poligono_t *p = poligono_crear(puntos, 4);
+  if( p == NULL){
+    return NULL;
+  }
+    
+  poligono_rotar(p, grados_a_radianes(parametros[4])); 
+  poligono_trasladar(p, parametros[0], parametros[1]);
+  
+  return p;
+}
+
+poligono_t *leer_geometria_poligono(FILE *f){
+  int16_t puntos;
+  if(fread(&puntos, sizeof(int16_t), 1, f) != 1) return NULL;
+  
+  poligono_t *p = poligono_crear(NULL, 0);
+  if(p == NULL){
+    return NULL;
+  }
+   
+  int16_t parametros[2];
+    
+  for(size_t i = 0; i < puntos; i++){
+    if(fread(parametros, sizeof(int16_t), 2, f) != 2){
+      poligono_destruir(p);
+      return NULL;
+    }
+    poligono_agregar_vertice(p, parametros[0], parametros[1]);
+  }
+  
+  return p;
+}
+
+poligono_t *leer_geometria(FILE*f, geometria_t geometria){
+  return geometrias[geometria](f);
+} 
+
 
 obstaculo_t *obstaculo_leer(FILE *f){
   color_t color;
@@ -122,20 +249,18 @@ obstaculo_t *obstaculo_leer(FILE *f){
   
   return obs;
 }
-  
+  //--------- fin de las funciones de lectura ---------//
+
 void obstaculo_mover_horizontal(obstaculo_t *obs, double dt){
+  
   if((obs->parametros_mov[1] >= obs->parametros_mov[0] ) && (obs->parametros_mov[2] > 0)) {
     obs->parametros_mov[2] *= -1;
   } 
     
   if((obs->parametros_mov[1] <= 0)  && (obs->parametros_mov[2] < 0) ){
     obs->parametros_mov[2] *= -1;
-  }
-  
+  } 
  
- // if(! ((obs->parametros_mov[1] >= 0) && (obs->parametros_mov[1] <= obs->parametros_mov[0]))) 
-   // obs->parametros_mov[2] *= -1;
-  
   poligono_trasladar(obs->cuerpo, obs->parametros_mov[2] * dt, 0);
   obs->parametros_mov[1] += obs->parametros_mov[2] * dt;
        
@@ -168,83 +293,3 @@ double obstaculo_distancia(const obstaculo_t *obs, float xp, float yp, float *no
   return poligono_distancia(obs->cuerpo, xp, yp, nor_x, nor_y);
 }
 
-/*int main (int argc, char *argv[]){
-  if(argc != 2) {
-    fprintf(stderr, "Uso: %s <archivo>\n", argv[0]);
-    return 1;
-  }
-
-  FILE *f = fopen(argv[1], "rb");
-  if(f == NULL) {
-    fprintf(stderr, "No pudo abrirse \"%s\"\n", argv[1]);
-    return 1;
-  }
-  
-  SDL_Window *window;
-  SDL_Renderer *renderer;
-  SDL_Event event;
-
-  SDL_CreateWindowAndRenderer(VENTANA_ANCHO, VENTANA_ALTO, 0, &window, &renderer);
-  SDL_SetWindowTitle(window, "Peggle");
-
- int dormir = 0;
-  
-  unsigned int ticks = SDL_GetTicks();
-  int16_t obstaculos;
-  if(! fread(&obstaculos, sizeof(int16_t), 1, f))
-    return 1;
-  obstaculo_t *obs[obstaculos];
-  
-  for(size_t i = 0; i < obstaculos; i++){
-    obs[i] = obstaculo_leer(f);
-  }
-  while(1){
-    
-     if(SDL_PollEvent(&event)) {
-        if(event.type == SDL_MOUSEBUTTONDOWN) {
-          if(obstaculo_color(obs[obstaculos - 1]) != COLOR_GRIS)
-             obstaculo_destruir(obs[obstaculos - 1]);
-           obstaculos--;
-        }
-            if (event.type == SDL_QUIT)
-                break;
-    }
-    
-    SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0x00);
-    SDL_RenderClear(renderer);
-    SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0x00);
-        
-    for(size_t i = 0; i < obstaculos; i++){
-     // obstaculo_dibujar(renderer, obs[i]);
-      obstaculo_mover(obs[i], DT);
-      obstaculo_dibujar(renderer, obs[i]);
-    }
-    
-      SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0x00);
-        SDL_RenderDrawLine(renderer, MIN_X, MIN_Y, MAX_X, MIN_Y);
-        SDL_RenderDrawLine(renderer, MIN_X, MAX_Y, MAX_X, MAX_Y);
-        SDL_RenderDrawLine(renderer, MIN_X, MAX_Y, MIN_X, MIN_Y);
-        SDL_RenderDrawLine(renderer, MAX_X, MAX_Y, MAX_X, MIN_Y);
-     
-      SDL_RenderPresent(renderer);
-        ticks = SDL_GetTicks() - ticks;
-        if(dormir) {
-            SDL_Delay(dormir);
-            dormir = 0;
-        }
-        else if(ticks < 1000 / JUEGO_FPS)
-            SDL_Delay(1000 / JUEGO_FPS - ticks);
-        ticks = SDL_GetTicks();
-    }
-  
-  
-   SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    
-    SDL_Quit();
-    fclose(f);
-    for(size_t i = 0; i < obstaculos; i++){
-      obstaculo_destruir(obs[i]);
-    }
-  return 0;
-}*/
